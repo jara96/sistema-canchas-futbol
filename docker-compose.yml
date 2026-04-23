@@ -1,0 +1,79 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tucancha-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-tucancha}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-root}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - tucancha-net
+
+  backend:
+    build:
+      context: ./backend
+    container_name: tucancha-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-tucancha}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      JWT_SECRET: ${JWT_SECRET:-cambia-este-secreto-por-uno-largo-y-aleatorio-de-al-menos-32-bytes-1234567890}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-demo-client-id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-demo-client-secret}
+      OAUTH2_REDIRECT_URI: ${OAUTH2_REDIRECT_URI:-http://localhost/oauth2/redirect}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:3000}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:-TEST-XXXXXXXXXXXX}
+      MP_PUBLIC_KEY: ${MP_PUBLIC_KEY:-TEST-XXXXXXXXXXXX}
+      MP_WEBHOOK_URL: ${MP_WEBHOOK_URL:-http://localhost:8080/api/pagos/webhook}
+      MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:-demo-secret}
+      MP_WEBHOOK_VALIDATE: ${MP_WEBHOOK_VALIDATE:-false}
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASS: ${MAIL_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@tucancha.local}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-true}
+      MAIL_DEBUG: ${MAIL_DEBUG:-false}
+    ports:
+      - "8080:8080"
+    networks:
+      - tucancha-net
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ""
+    container_name: tucancha-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - tucancha-net
+
+volumes:
+  mysql_data:
+
+networks:
+  tucancha-net:
+    driver: bridge
