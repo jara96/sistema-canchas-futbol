@@ -6,6 +6,7 @@ import Register from './pages/Register'
 import OAuth2Redirect from './pages/OAuth2Redirect'
 import Canchas from './pages/Canchas'
 import Reservar from './pages/Reservar'
+import ReservarTorneo from './pages/ReservarTorneo'
 import MisReservas from './pages/MisReservas'
 import Admin from './pages/Admin'
 
@@ -21,6 +22,9 @@ export default function App() {
 
         <Route path="/reservar/:canchaId" element={
           <PrivateRoute><Reservar /></PrivateRoute>
+        } />
+        <Route path="/torneo/:canchaId" element={
+          <PrivateRoute><ReservarTorneo /></PrivateRoute>
         } />
         <Route path="/mis-reservas" element={
           <PrivateRoute><MisReservas /></PrivateRoute>

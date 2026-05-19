@@ -32,6 +32,7 @@ public class ReservaResponse {
     private String usuarioEmail;
     private String codigoRetiro;
     private Boolean saldoPagado;
+    private Long torneoId;
 
     public static ReservaResponse from(Reserva r) {
         BigDecimal total = r.getTotal();
@@ -54,6 +55,7 @@ public class ReservaResponse {
                 .usuarioEmail(r.getUsuario().getEmail())
                 .codigoRetiro(r.getCodigoRetiro())
                 .saldoPagado(Boolean.TRUE.equals(r.getSaldoPagado()))
+                .torneoId(r.getTorneo() != null ? r.getTorneo().getId() : null)
                 .build();
     }
 }

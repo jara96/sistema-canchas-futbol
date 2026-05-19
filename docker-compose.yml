@@ -38,6 +38,8 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-demo-client-secret}
       OAUTH2_REDIRECT_URI: ${OAUTH2_REDIRECT_URI:-http://localhost/oauth2/redirect}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:3000}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
+      APP_FRONTEND_URL: ${APP_FRONTEND_URL:-http://localhost}
       MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:-TEST-XXXXXXXXXXXX}
       MP_PUBLIC_KEY: ${MP_PUBLIC_KEY:-TEST-XXXXXXXXXXXX}
       MP_WEBHOOK_URL: ${MP_WEBHOOK_URL:-http://localhost:8080/api/pagos/webhook}

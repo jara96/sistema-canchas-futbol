@@ -73,6 +73,12 @@ public class Reserva {
     @Builder.Default
     private Boolean saldoPagado = false;
 
+    /** Si la reserva pertenece a un torneo, este es el id del torneo agrupador. NULL si es reserva individual. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "torneo_id",
+            foreignKey = @ForeignKey(name = "fk_reserva_torneo"))
+    private Torneo torneo;
+
     @CreationTimestamp
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private LocalDateTime fechaCreacion;

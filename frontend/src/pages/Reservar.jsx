@@ -13,13 +13,22 @@ export default function Reservar() {
   const [turnoId, setTurnoId] = useState('')
   const [acepta, setAcepta] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [config, setConfig] = useState({ diasMaximoReserva: 30, diasMaximoTorneo: 90 })
 
   useEffect(() => {
     api.get(`/api/canchas/${canchaId}`).then(({ data }) => setCancha(data))
     api.get('/api/turnos/publicos').then(({ data }) => setTurnos(data))
     api.get('/api/dias-cerrados/publicos').then(({ data }) => setDiasCerrados(data.map(d => d.fecha)))
+    api.get('/api/config/publico').then(({ data }) => setConfig(data)).catch(() => {})
   }, [canchaId])
 
+  const addDays = (n) => {
+    const d = new Date()
+    d.setDate(d.getDate() + n)
+    return d.toISOString().slice(0, 10)
+  }
+  const limiteReservaStr = addDays(config.diasMaximoReserva)
+  const fueraDeLimite = fecha > limiteReservaStr
   const cerrado = diasCerrados.includes(fecha)
 
   useEffect(() => {
@@ -50,12 +59,32 @@ export default function Reservar() {
       <h1 className="text-2xl font-bold mb-2">Reservar {cancha.nombre}</h1>
       <p className="text-slate-600 mb-4">${cancha.precioHora}/h · Tipo {cancha.tipo}</p>
 
+      <button onClick={() => nav(`/torneo/${canchaId}`)}
+        className="w-full mb-4 bg-amber-500 hover:bg-amber-600 text-white py-2 rounded font-medium">
+        🏆 ¿Es para un torneo? Reservar varios turnos
+      </button>
+
       <label className="block text-sm font-medium mb-1">Fecha</label>
       <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
         min={new Date().toISOString().slice(0, 10)}
+        max={limiteReservaStr}
         className="w-full border rounded px-3 py-2 mb-4" />
 
-      {cerrado && (
+      {fueraDeLimite && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3 rounded mb-3">
+          <p className="font-bold mb-1">📅 Fecha fuera del rango de reservas comunes</p>
+          <p className="text-xs">
+            Solo se pueden reservar turnos individuales hasta el <b>{limiteReservaStr}</b>.
+            Para fechas posteriores podés crear una <b>reserva de torneo</b>.
+          </p>
+          <button onClick={() => nav(`/torneo/${canchaId}`)}
+            className="mt-2 bg-amber-600 text-white px-3 py-1 rounded text-xs hover:bg-amber-700">
+            🏆 Reservar para torneo
+          </button>
+        </div>
+      )}
+
+      {cerrado && !fueraDeLimite && (
         <p className="bg-red-50 border border-red-200 text-red-700 text-sm p-2 rounded mb-3">
           🚫 Ese día las canchas están cerradas
         </p>
@@ -125,7 +154,7 @@ export default function Reservar() {
         <span>Entiendo y acepto los términos: la seña no es reembolsable.</span>
       </label>
 
-      <button onClick={reservar} disabled={!turnoId || cerrado || !acepta}
+      <button onClick={reservar} disabled={!turnoId || cerrado || !acepta || fueraDeLimite}
         className="w-full bg-emerald-700 text-white py-2 rounded hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed">
         Reservar y pagar seña
       </button>

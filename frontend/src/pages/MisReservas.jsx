@@ -4,15 +4,27 @@ import { api } from '../api/api'
 const colorEstado = {
   PENDIENTE: 'bg-yellow-100 text-yellow-800',
   CONFIRMADA: 'bg-emerald-100 text-emerald-800',
+  FINALIZADA: 'bg-slate-200 text-slate-700',
   CANCELADA: 'bg-red-100 text-red-700'
+}
+
+const colorEstadoTorneo = {
+  PENDIENTE: 'bg-yellow-100 text-yellow-800',
+  CONFIRMADO: 'bg-emerald-100 text-emerald-800',
+  EXPIRADO: 'bg-red-100 text-red-700',
+  CANCELADO: 'bg-red-100 text-red-700'
 }
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })
 
 export default function MisReservas() {
   const [reservas, setReservas] = useState([])
+  const [torneos, setTorneos] = useState([])
 
-  const cargar = () => api.get('/api/reservas/mis').then(({ data }) => setReservas(data))
+  const cargar = () => {
+    api.get('/api/reservas/mis').then(({ data }) => setReservas(data))
+    api.get('/api/torneos/mios').then(({ data }) => setTorneos(data)).catch(() => setTorneos([]))
+  }
   useEffect(() => { cargar() }, [])
 
   const cancelar = async (id) => {
@@ -26,11 +38,84 @@ export default function MisReservas() {
     window.location.href = data.initPoint || data.sandboxInitPoint
   }
 
+  const pagarTorneo = async (id) => {
+    const { data } = await api.post(`/api/pagos/torneos/${id}/preferencia`)
+    window.location.href = data.initPoint || data.sandboxInitPoint
+  }
+
+  // Reservas individuales: las que no pertenecen a un torneo
+  const reservasIndividuales = reservas.filter((r) => !r.torneoId)
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-6">Mis reservas</h1>
+
+      {/* ===== TORNEOS ===== */}
+      {torneos.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-bold mb-3">🏆 Mis torneos</h2>
+          <div className="space-y-4">
+            {torneos.map((t) => {
+              const saldoTotal = Number(t.total ?? 0) - Number(t.totalSenia ?? 0)
+              return (
+                <div key={t.id} className="bg-white rounded shadow p-4 border-l-4 border-amber-500">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                    <div>
+                      <p className="font-bold">🏆 Torneo #{t.id} · {t.canchaNombre}</p>
+                      <p className="text-xs text-slate-500">{t.modalidad?.replace(/_/g, ' ')}</p>
+                      <p className="text-sm">
+                        {t.cantidadTurnos} turnos · Total ${fmt(t.total)} · Seña ${fmt(t.totalSenia)}
+                      </p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${colorEstadoTorneo[t.estado] || 'bg-slate-100'}`}>
+                      {t.estado}
+                    </span>
+                    {t.estado === 'PENDIENTE' && (
+                      <button onClick={() => pagarTorneo(t.id)}
+                        className="bg-emerald-700 text-white px-3 py-1 rounded hover:bg-emerald-800">
+                        Pagar seña
+                      </button>
+                    )}
+                  </div>
+
+                  {t.estado === 'CONFIRMADO' && (
+                    <div className="bg-emerald-50 border rounded p-3 mt-2">
+                      <p className="text-xs font-bold text-emerald-800 mb-2">
+                        TURNOS CONFIRMADOS · Saldo total a pagar en cancha: ${fmt(saldoTotal)}
+                      </p>
+                      <ul className="text-sm divide-y">
+                        {(t.reservas || []).map((r) => {
+                          const saldo = Number(r.total ?? 0) - Number(r.senia ?? 0)
+                          return (
+                            <li key={r.id} className="py-2 flex flex-wrap justify-between items-center gap-2">
+                              <span>
+                                📅 {r.fecha} · {r.horaInicio?.slice(0, 5)}-{r.horaFin?.slice(0, 5)}
+                              </span>
+                              <span className="font-mono font-bold tracking-wider text-emerald-800">
+                                {r.codigoRetiro || '—'}
+                              </span>
+                              <span>
+                                {r.saldoPagado
+                                  ? <span className="text-emerald-700 font-bold">pagado ✓</span>
+                                  : <span>${fmt(saldo)}</span>}
+                              </span>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ===== RESERVAS INDIVIDUALES ===== */}
+      <h2 className="text-lg font-bold mb-3">Reservas individuales</h2>
       <div className="space-y-3">
-        {reservas.map((r) => {
+        {reservasIndividuales.map((r) => {
           const saldo = Number(r.total ?? 0) - Number(r.senia ?? 0)
           const saldoPago = Boolean(r.saldoPagado)
           return (
@@ -55,7 +140,7 @@ export default function MisReservas() {
                       Pagar
                     </button>
                   )}
-                  {r.estado !== 'CANCELADA' && (
+                  {r.estado !== 'CANCELADA' && r.estado !== 'FINALIZADA' && (
                     <button onClick={() => cancelar(r.id)}
                       className="border border-red-400 text-red-600 px-3 py-1 rounded hover:bg-red-50">
                       Cancelar
@@ -96,7 +181,12 @@ export default function MisReservas() {
             </div>
           )
         })}
-        {reservas.length === 0 && <p className="text-slate-500">No tenés reservas todavía.</p>}
+        {reservasIndividuales.length === 0 && torneos.length === 0 && (
+          <p className="text-slate-500">No tenés reservas todavía.</p>
+        )}
+        {reservasIndividuales.length === 0 && torneos.length > 0 && (
+          <p className="text-slate-500 text-sm">Sin reservas individuales.</p>
+        )}
       </div>
     </div>
   )

@@ -32,6 +32,12 @@ public class PagoController {
         return mercadoPagoService.crearPreferencia(reservaId, CurrentUser.id());
     }
 
+    /** Crea la preferencia MP para pagar la seña total de un torneo. */
+    @PostMapping("/torneos/{torneoId}/preferencia")
+    public PreferenciaResponse crearPreferenciaTorneo(@PathVariable Long torneoId) {
+        return mercadoPagoService.crearPreferenciaTorneo(torneoId, CurrentUser.id());
+    }
+
     /** Admin: genera preferencia MP para cobrar el saldo restante (presencial / QR). */
     @PostMapping("/reservas/{reservaId}/saldo")
     @PreAuthorize("hasRole('ADMIN')")

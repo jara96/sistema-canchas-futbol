@@ -38,6 +38,7 @@ public class ReservaService {
     private final TurnoRepository turnoRepository;
     private final UsuarioRepository usuarioRepository;
     private final DiaCerradoRepository diaCerradoRepository;
+    private final ConfiguracionService configuracionService;
 
     private LocalDateTime limiteExpiracion() {
         return LocalDateTime.now().minusMinutes(MINUTOS_VENTANA_PAGO);
@@ -46,6 +47,13 @@ public class ReservaService {
     public Reserva crear(ReservaRequest req, Long usuarioId) {
         if (req.getFecha().isBefore(LocalDate.now())) {
             throw new BadRequestException("La fecha no puede ser anterior a hoy");
+        }
+
+        int diasMaximo = configuracionService.obtener().getDiasMaximoReserva();
+        LocalDate limiteFecha = LocalDate.now().plusDays(diasMaximo);
+        if (req.getFecha().isAfter(limiteFecha)) {
+            throw new BadRequestException("Solo se permiten reservas hasta el " + limiteFecha
+                    + ". Para fechas posteriores usá la opción de torneo.");
         }
 
         if (diaCerradoRepository.existsByFecha(req.getFecha())) {
@@ -127,6 +135,29 @@ public class ReservaService {
         return expiradas.size();
     }
 
+    /**
+     * Finaliza/cancela reservas cuya fecha ya pasó (al cruzar 00:00 del día siguiente):
+     *  - CONFIRMADA con fecha &lt; hoy → FINALIZADA (el cliente vino o tuvo derecho).
+     *  - PENDIENTE con fecha &lt; hoy → CANCELADA (nunca se concretó).
+     * Llamado por el scheduler horario.
+     */
+    public int finalizarPasadas() {
+        LocalDate hoy = LocalDate.now();
+        List<Reserva> pasadas = reservaRepository.findPasadasActivas(hoy);
+        int count = 0;
+        for (Reserva r : pasadas) {
+            if (r.getEstado() == EstadoReserva.CONFIRMADA) {
+                r.setEstado(EstadoReserva.FINALIZADA);
+                count++;
+            } else if (r.getEstado() == EstadoReserva.PENDIENTE) {
+                r.setEstado(EstadoReserva.CANCELADA);
+                count++;
+            }
+        }
+        if (count > 0) reservaRepository.saveAll(pasadas);
+        return count;
+    }
+
     public Reserva confirmar(Long id) {
         Reserva r = obtener(id);
         r.setEstado(EstadoReserva.CONFIRMADA);
@@ -137,6 +168,12 @@ public class ReservaService {
         Reserva r = obtener(id);
         if (!isAdmin && !r.getUsuario().getId().equals(usuarioId)) {
             throw new BadRequestException("No podés cancelar una reserva ajena");
+        }
+        if (r.getEstado() == EstadoReserva.FINALIZADA) {
+            throw new BadRequestException("No se puede cancelar una reserva ya finalizada");
+        }
+        if (r.getEstado() == EstadoReserva.CANCELADA) {
+            throw new BadRequestException("La reserva ya está cancelada");
         }
         r.setEstado(EstadoReserva.CANCELADA);
         return reservaRepository.save(r);

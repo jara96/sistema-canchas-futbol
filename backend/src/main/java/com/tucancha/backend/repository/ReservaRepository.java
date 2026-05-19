@@ -49,7 +49,15 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
             "AND r.fechaCreacion < :limite")
     List<Reserva> findPendientesExpiradas(@Param("limite") LocalDateTime limite);
 
+    /** Reservas cuya fecha de juego ya pasó y siguen activas (PENDIENTE o CONFIRMADA). */
+    @Query("SELECT r FROM Reserva r WHERE r.fecha < :hoy " +
+            "AND (r.estado = com.tucancha.backend.enums.EstadoReserva.CONFIRMADA " +
+            "  OR r.estado = com.tucancha.backend.enums.EstadoReserva.PENDIENTE)")
+    List<Reserva> findPasadasActivas(@Param("hoy") LocalDate hoy);
+
     Optional<Reserva> findByCodigoRetiro(String codigoRetiro);
 
     boolean existsByCodigoRetiro(String codigoRetiro);
+
+    List<Reserva> findByTorneoId(Long torneoId);
 }

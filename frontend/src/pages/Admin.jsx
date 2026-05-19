@@ -7,7 +7,9 @@ const tabs = [
   { id: 'turnos', label: 'Turnos' },
   { id: 'cerrados', label: 'Días cerrados' },
   { id: 'reservas', label: 'Reservas' },
-  { id: 'stats', label: 'Estadísticas' }
+  { id: 'agenda', label: 'Reservas del día' },
+  { id: 'stats', label: 'Estadísticas' },
+  { id: 'config', label: 'Configuración' }
 ]
 
 export default function Admin() {
@@ -27,7 +29,94 @@ export default function Admin() {
       {tab === 'turnos' && <TurnosAdmin />}
       {tab === 'cerrados' && <DiasCerradosAdmin />}
       {tab === 'reservas' && <ReservasAdmin />}
+      {tab === 'agenda' && <AgendaDelDia />}
       {tab === 'stats' && <StatsAdmin />}
+      {tab === 'config' && <ConfiguracionAdmin />}
+    </div>
+  )
+}
+
+/* ======================== CONFIGURACIÓN ======================== */
+function ConfiguracionAdmin() {
+  const [form, setForm] = useState({ diasMaximoReserva: 30, diasMaximoTorneo: 90 })
+  const [loaded, setLoaded] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const [error, setError] = useState(null)
+
+  const cargar = () => {
+    api.get('/api/config').then(({ data }) => {
+      setForm({
+        diasMaximoReserva: data.diasMaximoReserva ?? 30,
+        diasMaximoTorneo: data.diasMaximoTorneo ?? 90
+      })
+      setLoaded(true)
+    })
+  }
+  useEffect(() => { cargar() }, [])
+
+  const guardar = async (e) => {
+    e.preventDefault()
+    setMsg(null); setError(null)
+    try {
+      await api.put('/api/config', {
+        diasMaximoReserva: Number(form.diasMaximoReserva),
+        diasMaximoTorneo: Number(form.diasMaximoTorneo)
+      })
+      setMsg('Configuración guardada ✓')
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error guardando')
+    }
+  }
+
+  if (!loaded) return <p className="text-slate-500">Cargando configuración…</p>
+
+  const r = Number(form.diasMaximoReserva || 0)
+  const t = Number(form.diasMaximoTorneo || 0)
+
+  return (
+    <div className="max-w-xl">
+      <form onSubmit={guardar} className="bg-white p-6 rounded shadow space-y-4">
+        <div>
+          <h3 className="font-bold text-lg mb-1">Límites de reserva</h3>
+          <p className="text-sm text-slate-500">
+            Estos valores controlan hasta cuándo los usuarios pueden reservar a futuro.
+          </p>
+        </div>
+
+        <label className="block">
+          <span className="text-sm font-medium">Días máximos para reservas comunes</span>
+          <input type="number" min="1" max="365" required
+            value={form.diasMaximoReserva}
+            onChange={(e) => setForm({ ...form, diasMaximoReserva: e.target.value })}
+            className="mt-1 border rounded px-3 py-2 w-full" />
+          <span className="text-xs text-slate-500">
+            Default: 30. Los usuarios podrán reservar entre hoy y los próximos {r} días.
+          </span>
+        </label>
+
+        <label className="block">
+          <span className="text-sm font-medium">Días máximos adicionales para torneos</span>
+          <input type="number" min="1" max="365" required
+            value={form.diasMaximoTorneo}
+            onChange={(e) => setForm({ ...form, diasMaximoTorneo: e.target.value })}
+            className="mt-1 border rounded px-3 py-2 w-full" />
+          <span className="text-xs text-slate-500">
+            Default: 90. Las reservas de torneo se permiten desde el día {r + 1} al día {r + t}.
+          </span>
+        </label>
+
+        <div className="bg-slate-50 border rounded p-3 text-sm">
+          <p>📅 <b>Reservas comunes:</b> hoy → {r} días</p>
+          <p>🏆 <b>Torneos:</b> día {r + 1} → día {r + t}</p>
+        </div>
+
+        {msg && <p className="text-emerald-700 text-sm">{msg}</p>}
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+
+        <button className="bg-emerald-700 text-white px-4 py-2 rounded hover:bg-emerald-800">
+          Guardar configuración
+        </button>
+      </form>
     </div>
   )
 }
@@ -392,8 +481,9 @@ function ReservasAdmin() {
   }
 
   const filtradas = useMemo(() => items.filter((r) => {
-    if (!verHistorial && r.estado === 'CANCELADA') return false
-    if (verHistorial && r.estado !== 'CANCELADA') return false
+    const esHistorial = r.estado === 'CANCELADA' || r.estado === 'FINALIZADA'
+    if (!verHistorial && esHistorial) return false
+    if (verHistorial && !esHistorial) return false
     if (filtroCancha && String(r.canchaId) !== filtroCancha) return false
     if (filtroEstado && r.estado !== filtroEstado) return false
     if (busquedaCodigo.trim()) {
@@ -406,7 +496,7 @@ function ReservasAdmin() {
     return true
   }), [items, filtroCancha, filtroEstado, verHistorial, busquedaCodigo])
 
-  const canceladasCount = items.filter((r) => r.estado === 'CANCELADA').length
+  const canceladasCount = items.filter((r) => r.estado === 'CANCELADA' || r.estado === 'FINALIZADA').length
 
   const fmt = (n) => Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })
 
@@ -440,7 +530,7 @@ function ReservasAdmin() {
         )}
         <button onClick={() => { setVerHistorial(!verHistorial); setFiltroEstado('') }}
           className="self-end text-sm text-slate-600 hover:underline">
-          {verHistorial ? '← Volver a activas' : `Ver historial cancelaciones (${canceladasCount})`}
+          {verHistorial ? '← Volver a activas' : `Ver historial (canceladas + finalizadas) (${canceladasCount})`}
         </button>
         <div className="ml-auto self-end text-sm text-slate-500">
           Mostrando {filtradas.length}
@@ -483,13 +573,13 @@ function ReservasAdmin() {
                     {r.estado === 'PENDIENTE' && (
                       <button onClick={() => confirmar(r.id)} className="text-emerald-700 hover:underline">Confirmar</button>
                     )}
-                    {r.estado === 'CONFIRMADA' && !r.saldoPagado && (
+                    {r.estado === 'CONFIRMADA' && !r.saldoPagado && r.fecha >= new Date().toISOString().slice(0,10) && (
                       <button onClick={() => cobrarSaldo(r)}
                         className="bg-emerald-700 text-white px-2 py-1 rounded hover:bg-emerald-800">
                         Cobrar saldo
                       </button>
                     )}
-                    {r.estado !== 'CANCELADA' && (
+                    {r.estado !== 'CANCELADA' && r.estado !== 'FINALIZADA' && (
                       <button onClick={() => cancelar(r.id)} className="text-red-600 hover:underline">Cancelar</button>
                     )}
                   </td>
@@ -703,4 +793,223 @@ function StatCard({ label, value, color }) {
 
 function Empty() {
   return <p className="text-sm text-slate-400 text-center py-12">Sin datos aún</p>
+}
+
+/* ======================== AGENDA / RESERVAS DEL DÍA ======================== */
+const ESTADO_CHIP = {
+  PENDIENTE:  'bg-yellow-100 text-yellow-800 border-yellow-300',
+  CONFIRMADA: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+  FINALIZADA: 'bg-slate-200 text-slate-700 border-slate-300',
+  CANCELADA:  'bg-red-100 text-red-700 border-red-300'
+}
+
+function AgendaDelDia() {
+  const hoyStr = new Date().toISOString().slice(0, 10)
+  const [fecha, setFecha] = useState(hoyStr)
+  const [canchas, setCanchas] = useState([])
+  const [turnos, setTurnos] = useState([])
+  const [reservas, setReservas] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [qrModal, setQrModal] = useState(null) // { reserva, initPoint, saldo }
+
+  const cargar = () => {
+    setLoading(true)
+    Promise.all([
+      api.get('/api/canchas'),
+      api.get('/api/turnos'),
+      api.get('/api/reservas')
+    ]).then(([cs, ts, rs]) => {
+      setCanchas(cs.data.filter((c) => c.activa))
+      setTurnos(ts.data.filter((t) => t.activo).sort((a, b) =>
+        a.horaInicio.localeCompare(b.horaInicio)))
+      setReservas(rs.data)
+    }).finally(() => setLoading(false))
+  }
+  useEffect(() => { cargar() }, [])
+
+  const cobrarSaldo = async (r) => {
+    try {
+      const { data } = await api.post(`/api/pagos/reservas/${r.id}/saldo`)
+      const saldo = Number(r.total ?? 0) - Number(r.senia ?? 0)
+      setQrModal({
+        reserva: r,
+        initPoint: data.initPoint || data.sandboxInitPoint,
+        saldo
+      })
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error generando QR')
+    }
+  }
+
+  // Buscar la reserva ACTIVA (no CANCELADA) para ese cruce (cancha, turno, fecha)
+  const buscarReserva = (canchaId, turnoId) => {
+    return reservas.find((r) =>
+      r.canchaId === canchaId &&
+      r.turnoId === turnoId &&
+      r.fecha === fecha &&
+      r.estado !== 'CANCELADA'
+    )
+  }
+
+  const esPasado = fecha < hoyStr
+  const fmt = (n) => Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })
+
+  if (loading) return <p className="text-slate-500">Cargando agenda…</p>
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-3 mb-4 items-end">
+        <label>
+          <span className="text-xs text-slate-500 block">Fecha</span>
+          <input type="date" value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            className="border rounded px-3 py-1" />
+        </label>
+        <button onClick={() => setFecha(hoyStr)}
+          className="text-sm text-emerald-700 hover:underline">Hoy</button>
+        <button onClick={cargar}
+          className="ml-auto text-sm text-slate-600 hover:underline">↻ Actualizar</button>
+      </div>
+
+      {esPasado && (
+        <p className="bg-slate-100 border border-slate-300 text-slate-700 text-sm p-2 rounded mb-3">
+          📅 Fecha pasada · solo lectura. Las reservas confirmadas aparecen como FINALIZADA.
+        </p>
+      )}
+
+      <div className="overflow-x-auto bg-white rounded shadow">
+        <table className="min-w-full text-xs border-collapse">
+          <thead>
+            <tr className="bg-slate-100">
+              <th className="p-2 text-left sticky left-0 bg-slate-100 z-10 border-r"
+                  style={{ minWidth: '140px' }}>Cancha</th>
+              {turnos.map((t) => (
+                <th key={t.id} className="p-2 text-center border-l whitespace-nowrap"
+                    style={{ minWidth: '160px' }}>
+                  {t.horaInicio?.slice(0, 5)} - {t.horaFin?.slice(0, 5)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {canchas.map((c) => (
+              <tr key={c.id} className="border-t align-top">
+                <td className="p-2 font-bold sticky left-0 bg-white z-10 border-r"
+                    style={{ minWidth: '140px' }}>
+                  <div>{c.nombre}</div>
+                  <div className="text-[10px] font-normal text-slate-500">{c.tipo}</div>
+                </td>
+                {turnos.map((t) => {
+                  const r = buscarReserva(c.id, t.id)
+                  if (!r) {
+                    return (
+                      <td key={t.id} className="p-2 text-center border-l text-slate-300">
+                        —
+                      </td>
+                    )
+                  }
+                  const saldo = Number(r.total ?? 0) - Number(r.senia ?? 0)
+                  const puedeCobrarSaldo =
+                    !esPasado &&
+                    r.estado === 'CONFIRMADA' &&
+                    !r.saldoPagado
+                  return (
+                    <td key={t.id} className="p-2 border-l align-top">
+                      <div className="text-[11px] font-bold truncate" title={r.usuarioEmail}>
+                        {r.usuarioNombre || r.usuarioEmail}
+                      </div>
+                      {r.torneoId && (
+                        <span className="inline-block text-[10px] bg-amber-100 text-amber-800 rounded px-1 mr-1">
+                          🏆 #{r.torneoId}
+                        </span>
+                      )}
+                      <span className={`inline-block text-[10px] border px-1 rounded ${ESTADO_CHIP[r.estado] || ''}`}>
+                        {r.estado}
+                      </span>
+                      {r.codigoRetiro && (
+                        <div className="font-mono font-bold tracking-wider text-emerald-800 mt-1">
+                          {r.codigoRetiro}
+                        </div>
+                      )}
+                      <div className="text-[10px] text-slate-600 mt-1">
+                        {r.saldoPagado
+                          ? <span className="text-emerald-700 font-bold">saldo ✓</span>
+                          : <span>saldo ${fmt(saldo)}</span>}
+                      </div>
+                      {puedeCobrarSaldo && (
+                        <button onClick={() => cobrarSaldo(r)}
+                          className="mt-1 text-[10px] bg-emerald-700 text-white px-2 py-0.5 rounded hover:bg-emerald-800">
+                          Cobrar saldo
+                        </button>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+            {canchas.length === 0 && (
+              <tr><td colSpan={turnos.length + 1} className="p-4 text-center text-slate-500">
+                No hay canchas activas
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mt-3 text-[11px] text-slate-500">
+        <span>Estados:</span>
+        <span className="border rounded px-1 bg-yellow-100 text-yellow-800">PENDIENTE</span>
+        <span className="border rounded px-1 bg-emerald-100 text-emerald-800">CONFIRMADA</span>
+        <span className="border rounded px-1 bg-slate-200 text-slate-700">FINALIZADA</span>
+        <span className="ml-2">🏆 = parte de un torneo</span>
+      </div>
+
+      {qrModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+             onClick={() => setQrModal(null)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full"
+               onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="text-lg font-bold">Cobrar saldo</h3>
+                <p className="text-sm text-slate-600">
+                  {qrModal.reserva.canchaNombre} · {qrModal.reserva.fecha}
+                </p>
+                <p className="text-sm">
+                  Cliente: <b>{qrModal.reserva.usuarioNombre}</b>
+                </p>
+                <p className="text-2xl font-bold text-emerald-700 mt-1">
+                  ${fmt(qrModal.saldo)}
+                </p>
+              </div>
+              <button onClick={() => setQrModal(null)}
+                className="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
+            </div>
+            <div className="flex justify-center bg-white border rounded p-4">
+              <img alt="QR de pago"
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(qrModal.initPoint)}`}
+                className="w-64 h-64" />
+            </div>
+            <p className="text-xs text-slate-500 text-center mt-3">
+              Escaneá el QR con la app de MercadoPago del cliente para cobrar el saldo.
+            </p>
+            <a href={qrModal.initPoint} target="_blank" rel="noreferrer"
+              className="block text-center text-xs text-emerald-700 hover:underline mt-2 break-all">
+              Abrir link de pago
+            </a>
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => { setQrModal(null); cargar() }}
+                className="flex-1 bg-emerald-700 text-white rounded py-2 hover:bg-emerald-800">
+                Listo, actualizar
+              </button>
+              <button onClick={() => setQrModal(null)}
+                className="flex-1 border rounded py-2 hover:bg-slate-50">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }

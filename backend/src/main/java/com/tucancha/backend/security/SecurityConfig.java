@@ -76,7 +76,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**", "/oauth2/**", "/login/**").permitAll()
                         .requestMatchers("/api/pagos/webhook").permitAll()
                         .requestMatchers("/api/canchas/publicas/**", "/api/turnos/publicos/**",
-                                "/api/dias-cerrados/publicos/**").permitAll()
+                                "/api/dias-cerrados/publicos/**", "/api/config/publico").permitAll()
+                        .requestMatchers("/mis-reservas", "/canchas", "/admin").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .anyRequest().authenticated()
                 )
